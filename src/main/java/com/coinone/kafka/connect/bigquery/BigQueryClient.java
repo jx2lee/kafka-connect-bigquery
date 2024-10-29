@@ -18,6 +18,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Objects;
+import java.util.ArrayList;
 
 import com.coinone.kafka.connect.bigquery.exception.BigQueryClientException;
 import com.coinone.kafka.connect.bigquery.exception.BigQueryCredentialsException;
@@ -25,10 +26,12 @@ import com.coinone.kafka.connect.bigquery.exception.BigQueryCredentialsException
 public class BigQueryClient implements AutoCloseable {
     private static final Logger logger = LoggerFactory.getLogger(BigQueryClient.class);
 
-    private static final Collection<String> SCOPES = Lists.newArrayList(
-            "https://www.googleapis.com/auth/bigquery",
-            "https://www.googleapis.com/auth/bigquery.insertdata",
-            "https://www.googleapis.com/auth/cloud-platform"
+    private static final Collection<String> WRITE_SCOPES = Lists.newArrayList(
+            "https://www.googleapis.com/auth/bigquery.insertdata"
+    );
+
+    private static final Collection<String> READ_SCOPES = Lists.newArrayList(
+            "https://www.googleapis.com/auth/bigquery.readonly"
     );
 
     private final String projectId;
@@ -73,7 +76,19 @@ public class BigQueryClient implements AutoCloseable {
             }
 
             GoogleCredentials credentials = GoogleCredentials.fromStream(credentialsStream);
-            return useStorageApi ? credentials.createScoped(SCOPES) : credentials;
+            if (!useStorageApi) {
+                return credentials;
+            }
+            
+            Collection<String> requiredScopes = new ArrayList<>();
+            if (writeClient != null) {
+                requiredScopes.addAll(WRITE_SCOPES);
+            }
+            if (readClient != null) {
+                requiredScopes.addAll(READ_SCOPES);
+            }
+            
+            return credentials.createScoped(requiredScopes);
         } catch (IOException e) {
             throw new BigQueryCredentialsException("Failed to create credentials", e);
         }
