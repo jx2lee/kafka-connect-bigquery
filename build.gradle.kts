@@ -70,8 +70,17 @@ repositories {
 val bigqueryDependencies: Configuration by configurations.creating
 
 dependencies {
+    // kafka connect
     implementation("org.apache.kafka:connect-api:$connectApiVersion")
+
+    // google cloud
+    implementation(platform("com.google.cloud:libraries-bom:26.49.0"))
+    implementation("com.google.cloud:google-cloud-bigquerystorage")
+
+    // log
     implementation("org.slf4j:slf4j-simple:2.0.11")
+
+    // test
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
 }
