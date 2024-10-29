@@ -19,6 +19,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Objects;
 
+import com.coinone.kafka.connect.bigquery.exception.BigQueryClientException;
+import com.coinone.kafka.connect.bigquery.exception.BigQueryCredentialsException;
+
 public class BigQueryClient implements AutoCloseable {
     private static final Logger logger = LoggerFactory.getLogger(BigQueryClient.class);
 
@@ -33,58 +36,73 @@ public class BigQueryClient implements AutoCloseable {
     private final BigQueryReadClient readClient;
     private final boolean useStorageApi;
 
-    public BigQueryClient(String projectId, String keySource, String key, boolean useStorageApi)
-            throws IOException {
+    public BigQueryClient(String projectId, String keySource, String key, boolean useStorageApi) {
         this.projectId = projectId;
         this.useStorageApi = useStorageApi;
 
-        GoogleCredentials credentials = createCredentials(keySource, key);
+        try {
+            GoogleCredentials credentials = createCredentials(keySource, key);
 
-        if (useStorageApi) {
-            this.writeClient = createWriteClient(credentials);
-            this.readClient = createReadClient(credentials);
-        } else {
-            this.writeClient = null;
-            this.readClient = null;
+            if (useStorageApi) {
+                this.writeClient = createWriteClient(credentials);
+                this.readClient = createReadClient(credentials);
+            } else {
+                this.writeClient = null;
+                this.readClient = null;
+            }
+        } catch (IOException e) {
+            throw new BigQueryClientException("Failed to initialize BigQuery client", e);
         }
     }
 
     private GoogleCredentials createCredentials(String keySource, String key) throws IOException {
-        if (key == null && "APPLICATION_DEFAULT".equals(keySource)) {
-            logger.debug("Using application default credentials");
-            return GoogleCredentials.getApplicationDefault();
-        }
+        try {
+            if (key == null && "APPLICATION_DEFAULT".equals(keySource)) {
+                logger.debug("Using application default credentials");
+                return GoogleCredentials.getApplicationDefault();
+            }
 
-        InputStream credentialsStream;
-        if ("JSON".equals(keySource)) {
-            credentialsStream = new ByteArrayInputStream(Objects.requireNonNull(key).getBytes(StandardCharsets.UTF_8));
-        } else if ("FILE".equals(keySource)) {
-            logger.debug("Loading credentials from file: {}", key);
-            credentialsStream = new FileInputStream(Objects.requireNonNull(key));
-        } else {
-            throw new IllegalArgumentException("Invalid key source: " + keySource);
-        }
+            InputStream credentialsStream;
+            if ("JSON".equals(keySource)) {
+                credentialsStream = new ByteArrayInputStream(Objects.requireNonNull(key).getBytes(StandardCharsets.UTF_8));
+            } else if ("FILE".equals(keySource)) {
+                logger.debug("Loading credentials from file: {}", key);
+                credentialsStream = new FileInputStream(Objects.requireNonNull(key));
+            } else {
+                throw new BigQueryCredentialsException("Invalid key source: " + keySource);
+            }
 
-        GoogleCredentials credentials = GoogleCredentials.fromStream(credentialsStream);
-        return useStorageApi ? credentials.createScoped(SCOPES) : credentials;
+            GoogleCredentials credentials = GoogleCredentials.fromStream(credentialsStream);
+            return useStorageApi ? credentials.createScoped(SCOPES) : credentials;
+        } catch (IOException e) {
+            throw new BigQueryCredentialsException("Failed to create credentials", e);
+        }
     }
 
-    private BigQueryWriteClient createWriteClient(GoogleCredentials credentials) throws IOException {
-        BigQueryWriteSettings writeSettings = BigQueryWriteSettings.newBuilder()
-                .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
-                .setQuotaProjectId(projectId)
-                .build();
+    private BigQueryWriteClient createWriteClient(GoogleCredentials credentials) {
+        try {
+            BigQueryWriteSettings writeSettings = BigQueryWriteSettings.newBuilder()
+                    .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
+                    .setQuotaProjectId(projectId)
+                    .build();
 
-        return BigQueryWriteClient.create(writeSettings);
+            return BigQueryWriteClient.create(writeSettings);
+        } catch (IOException e) {
+            throw new BigQueryClientException("Failed to create BigQuery write client", e);
+        }
     }
 
-    private BigQueryReadClient createReadClient(GoogleCredentials credentials) throws IOException {
-        return BigQueryReadClient.create(
-                BigQueryReadSettings.newBuilder()
-                        .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
-                        .setQuotaProjectId(projectId)
-                        .build()
-        );
+    private BigQueryReadClient createReadClient(GoogleCredentials credentials) {
+        try {
+            return BigQueryReadClient.create(
+                    BigQueryReadSettings.newBuilder()
+                            .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
+                            .setQuotaProjectId(projectId)
+                            .build()
+            );
+        } catch (IOException e) {
+            throw new BigQueryClientException("Failed to create BigQuery read client", e);
+        }
     }
 
     public BigQueryWriteClient getWriteClient() {
@@ -104,12 +122,16 @@ public class BigQueryClient implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
-        if (writeClient != null) {
-            writeClient.close();
-        }
-        if (readClient != null) {
-            readClient.close();
+    public void close() {
+        try {
+            if (writeClient != null) {
+                writeClient.close();
+            }
+            if (readClient != null) {
+                readClient.close();
+            }
+        } catch (Exception e) {
+            throw new BigQueryClientException("Failed to close BigQuery clients", e);
         }
     }
 }
