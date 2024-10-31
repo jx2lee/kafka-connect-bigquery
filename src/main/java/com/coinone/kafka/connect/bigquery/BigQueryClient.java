@@ -109,12 +109,12 @@ public class BigQueryClient implements AutoCloseable {
 
     private BigQueryReadClient createReadClient(GoogleCredentials credentials) {
         try {
-            return BigQueryReadClient.create(
-                    BigQueryReadSettings.newBuilder()
-                            .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
-                            .setQuotaProjectId(projectId)
-                            .build()
-            );
+            BigQueryReadSettings readSettings = BigQueryReadSettings.newBuilder()
+                    .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
+                    .setQuotaProjectId(projectId)
+                    .build();
+
+            return BigQueryReadClient.create(readSettings);
         } catch (IOException e) {
             throw new BigQueryClientException("Failed to create BigQuery read client", e);
         }
