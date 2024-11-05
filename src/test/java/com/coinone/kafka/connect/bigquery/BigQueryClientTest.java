@@ -40,23 +40,28 @@ class BigQueryClientTest {
 
     @Test
     void shouldCreateClientWithJsonKey() throws IOException {
-        try (MockedStatic<GoogleCredentials> googleCredentials = mockStatic(GoogleCredentials.class);
-             MockedStatic<BigQueryWriteClient> writeClientStatic = mockStatic(BigQueryWriteClient.class);
-             MockedStatic<BigQueryReadClient> readClientStatic = mockStatic(BigQueryReadClient.class);
-             BigQueryClient client = new BigQueryClient(PROJECT_ID, "JSON", JSON_KEY, true)) {
-            
+        try (MockedStatic<GoogleCredentials> googleCredentials = mockStatic(GoogleCredentials.class)) {
             // Given
-            when(credentials.createScoped(any(Collection.class))).thenReturn(credentials);
+            GoogleCredentials scopedCredentials = mock(GoogleCredentials.class);
+            when(credentials.createScoped(any(Collection.class))).thenReturn(scopedCredentials);
             googleCredentials.when(() -> GoogleCredentials.fromStream(any())).thenReturn(credentials);
-            writeClientStatic.when(() -> BigQueryWriteClient.create(any(BigQueryWriteSettings.class))).thenReturn(writeClient);
-            readClientStatic.when(() -> BigQueryReadClient.create(any(BigQueryReadSettings.class))).thenReturn(readClient);
+            
+            try (MockedStatic<BigQueryWriteClient> writeClientStatic = mockStatic(BigQueryWriteClient.class);
+                 MockedStatic<BigQueryReadClient> readClientStatic = mockStatic(BigQueryReadClient.class)) {
+                
+                writeClientStatic.when(() -> BigQueryWriteClient.create(any(BigQueryWriteSettings.class))).thenReturn(writeClient);
+                readClientStatic.when(() -> BigQueryReadClient.create(any(BigQueryReadSettings.class))).thenReturn(readClient);
 
-            // Then
-            assertThat(client.getWriteClient()).isNotNull();
-            assertThat(client.getReadClient()).isNotNull();
-            assertThat(client.getProjectId()).isEqualTo(PROJECT_ID);
-            assertThat(client.isUseStorageApi()).isTrue();
-            verify(credentials).createScoped(any(Collection.class));
+                // When
+                try (BigQueryClient client = new BigQueryClient(PROJECT_ID, "JSON", JSON_KEY, true)) {
+                    // Then
+                    assertThat(client.getWriteClient()).isNotNull();
+                    assertThat(client.getReadClient()).isNotNull();
+                    assertThat(client.getProjectId()).isEqualTo(PROJECT_ID);
+                    assertThat(client.isUseStorageApi()).isTrue();
+                    verify(credentials).createScoped(any(Collection.class));
+                }
+            }
         }
     }
 
@@ -67,7 +72,8 @@ class BigQueryClientTest {
         Files.write(tempFile, JSON_KEY.getBytes());
 
         try (MockedStatic<GoogleCredentials> googleCredentials = mockStatic(GoogleCredentials.class)) {
-            when(credentials.createScoped(any(Collection.class))).thenReturn(credentials);
+            GoogleCredentials scopedCredentials = mock(GoogleCredentials.class);
+            when(credentials.createScoped(any(Collection.class))).thenReturn(scopedCredentials);
             googleCredentials.when(() -> GoogleCredentials.fromStream(any())).thenReturn(credentials);
             
             try (MockedStatic<BigQueryWriteClient> writeClientStatic = mockStatic(BigQueryWriteClient.class);
@@ -77,12 +83,12 @@ class BigQueryClientTest {
                 readClientStatic.when(() -> BigQueryReadClient.create(any(BigQueryReadSettings.class))).thenReturn(readClient);
 
                 // When
-                BigQueryClient client = new BigQueryClient(PROJECT_ID, "FILE", tempFile.toString(), true);
-
-                // Then
-                assertThat(client.getWriteClient()).isNotNull();
-                assertThat(client.getReadClient()).isNotNull();
-                verify(credentials).createScoped(any(Collection.class));
+                try (BigQueryClient client = new BigQueryClient(PROJECT_ID, "FILE", tempFile.toString(), true)) {
+                    // Then
+                    assertThat(client.getWriteClient()).isNotNull();
+                    assertThat(client.getReadClient()).isNotNull();
+                    verify(credentials).createScoped(any(Collection.class));
+                }
             }
         }
 
